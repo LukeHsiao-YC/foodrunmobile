@@ -2,49 +2,48 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>紅綠燈食物大冒險 v6.0 (手機版)</title>
+    <title>紅綠燈食物大冒險 v7.0 (完美適配版)</title>
     <style>
-        body {
+        /* 重置預設樣式，確保滿版 */
+        html, body {
             margin: 0;
             padding: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #333; /* 背景改深色，更像遊戲機 */
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* 禁止捲動 */
+            background-color: #333;
             font-family: 'Microsoft JhengHei', sans-serif;
-            overflow: hidden;
-            /* 禁止選取文字與長按跳出選單 */
-            user-select: none; 
+            /* 禁止選取 */
+            user-select: none;
             -webkit-user-select: none;
-            touch-action: manipulation;
+            touch-action: none; /* 禁止預設觸控行為 */
+            position: fixed; /* 鎖定畫面防止橡皮筋效果 */
         }
-        
+
+        /* 遊戲容器：負責置中 Canvas */
         #game-container {
-            position: relative;
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
+            background: #333;
         }
 
         canvas {
-            background-color: #fff;
-            border-radius: 8px;
+            /* 實際尺寸由 JS 控制，這裡只設陰影 */
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%);
-            /* 讓 Canvas 在手機上保持比例但盡量放大 */
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
+            border-radius: 8px;
         }
 
-        /* 介面層：包含標題說明 */
+        /* 介面層 */
         #ui-layer {
             position: absolute;
             top: 10px;
@@ -52,23 +51,23 @@
             transform: translateX(-50%);
             text-align: center;
             background: rgba(255, 255, 255, 0.9);
-            padding: 8px 20px;
+            padding: 5px 15px;
             border-radius: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            width: auto;
             white-space: nowrap;
             z-index: 10;
+            pointer-events: none; /* 讓點擊穿透到遊戲 */
         }
 
-        h2 { margin: 0; font-size: 1.2rem; color: #333; }
-        .instructions { font-size: 0.8rem; color: #555; margin-top: 2px;}
+        h2 { margin: 0; font-size: 1.1rem; color: #333; }
+        .instructions { font-size: 0.75rem; color: #555; margin-top: 2px;}
         
-        .tag { padding: 2px 5px; border-radius: 4px; color: white; display: inline-block; margin: 0 2px; font-size: 0.75rem;}
+        .tag { padding: 1px 4px; border-radius: 3px; color: white; display: inline-block; margin: 0 2px; font-size: 0.7rem;}
         .g-tag { background-color: #27ae60; }
         .y-tag { background-color: #f39c12; }
         .r-tag { background-color: #c0392b; }
 
-        /* --- 手機轉向提示層 (預設隱藏) --- */
+        /* 轉向提示 */
         #rotate-message {
             display: none;
             position: fixed;
@@ -88,7 +87,6 @@
             100% { transform: rotate(0deg); }
         }
 
-        /* 當螢幕是直向 (Portrait) 時，顯示轉向提示 */
         @media screen and (orientation: portrait) {
             #rotate-message { display: flex; }
             #game-container { display: none; }
@@ -113,12 +111,51 @@
                 <span class="tag r-tag">紅燈</span>不吃
             </div>
         </div>
-        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
     </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const container = document.getElementById('game-container');
+
+    // --- 0. 自動縮放邏輯 (解決畫面被切掉的關鍵) ---
+    function resizeGame() {
+        // 取得瀏覽器內部實際可用寬高
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // 遊戲原始設計比例
+        const gameRatio = canvas.width / canvas.height;
+        const windowRatio = windowWidth / windowHeight;
+        
+        let finalWidth, finalHeight;
+
+        // 計算最佳縮放尺寸 (Letterbox 模式：保持比例，塞滿畫面)
+        if (windowRatio < gameRatio) {
+            // 螢幕比較窄，以寬度為基準
+            finalWidth = windowWidth;
+            finalHeight = windowWidth / gameRatio;
+        } else {
+            // 螢幕比較寬，以高度為基準
+            finalWidth = windowHeight * gameRatio;
+            finalHeight = windowHeight;
+        }
+
+        // 套用 CSS 尺寸 (不影響 Canvas 內部的解析度)
+        canvas.style.width = finalWidth + "px";
+        canvas.style.height = finalHeight + "px";
+    }
+
+    // 監聽視窗變化，隨時調整
+    window.addEventListener('resize', resizeGame);
+    window.addEventListener('orientationchange', () => {
+        // 轉向時有時候瀏覽器反應慢，延遲一下再算
+        setTimeout(resizeGame, 200);
+    });
+    // 初始執行一次
+    resizeGame();
+
 
     // --- 1. 食物資料庫 ---
     const greenList = [
@@ -155,29 +192,13 @@
         {name:"冰淇淋蛋糕", icon:"🎂"}
     ];
 
-    // --- 2. 關卡設定 ---
+    // --- 2. 關卡與遊戲參數 ---
     const levelConfig = [
-        { 
-            targetScore: 100, 
-            speed: 4, 
-            title: "Level 1: 新手出發", 
-            msg: "做得好！多選「綠燈食物」\n身體輕盈，才能跳得更高喔！" 
-        },
-        { 
-            targetScore: 300, 
-            speed: 5.5, 
-            title: "Level 2: 美味誘惑", 
-            msg: "越來越棒了！「黃燈食物」可以吃，\n但是要控制份量，偶爾吃就好！" 
-        },
-        { 
-            targetScore: 600, 
-            speed: 7, 
-            title: "Level 3: 極速挑戰", 
-            msg: "太厲害了！記住絕對要避開「紅燈食物」，\n它們會讓你變胖跑不動喔！" 
-        }
+        { targetScore: 100, speed: 4, msg: "做得好！多選「綠燈食物」\n身體輕盈，才能跳得更高喔！" },
+        { targetScore: 300, speed: 5.5, msg: "越來越棒了！「黃燈食物」可以吃，\n但是要控制份量，偶爾吃就好！" },
+        { targetScore: 600, speed: 7, msg: "太厲害了！記住絕對要避開「紅燈食物」，\n它們會讓你變胖跑不動喔！" }
     ];
 
-    // --- 3. 遊戲參數 ---
     let score = 0;
     let currentLevel = 0;
     let gameSpeed = 4;
@@ -187,7 +208,7 @@
 
     const player = {
         x: 60,
-        y: 280, // 稍微調高起始位置
+        y: 300, 
         width: 50,
         height: 50,
         baseSize: 50,
@@ -204,8 +225,9 @@
     let foods = [];
     let effects = [];
 
-    // --- 4. 核心邏輯 ---
-    // (邏輯與之前相同，僅微調畫面參數以適應縮放)
+    // --- 3. 核心邏輯 (為適配 16:9 修改地面位置) ---
+    // 地面位置設為 400 (Canvas 高度 450)
+    const GROUND_Y = 400;
 
     function spawnFood() {
         let rand = Math.random();
@@ -230,7 +252,7 @@
 
         foods.push({
             x: canvas.width,
-            y: 250 + Math.random() * 80, // 調整生成高度區間
+            y: (GROUND_Y - 100) + Math.random() * 80, // 根據新地面調整生成
             size: 45,
             data: type,
             category: category,
@@ -281,29 +303,25 @@
         }
     }
 
-    // 支援鍵盤與觸控
-    document.addEventListener('keydown', (e) => {
+    // 統一監聽整個頁面，防止死角
+    window.addEventListener('keydown', (e) => {
         if (e.code === 'Space') handleInput();
     });
-    // 使用 touchend 或是 click，這裡統一監聽 container 範圍
-    const container = document.getElementById('game-container');
     
-    // 桌面滑鼠
-    container.addEventListener('mousedown', (e) => {
-        e.preventDefault(); 
-        handleInput();
+    // 支援觸控與滑鼠
+    ['mousedown', 'touchstart'].forEach(evt => {
+        document.body.addEventListener(evt, (e) => {
+            // 只有當不是在點擊「轉向提示」時才觸發遊戲輸入
+            if (e.target.id !== 'rotate-message') {
+                e.preventDefault();
+                handleInput();
+            }
+        }, { passive: false });
     });
-    
-    // 手機觸控 (防止預設行為)
-    container.addEventListener('touchstart', (e) => { 
-        e.preventDefault(); 
-        handleInput(); 
-    }, {passive: false});
-
 
     function startGame() {
         gameState = 'PLAYING';
-        player.y = 280;
+        player.y = 300;
         updateLevelSettings();
     }
 
@@ -330,10 +348,9 @@
         player.dy += player.gravity;
         player.y += player.dy;
 
-        // 地面高度固定
-        let groundY = 350;
-        if (player.y + player.height > groundY) {
-            player.y = groundY - player.height;
+        // 地面判定
+        if (player.y + player.height > GROUND_Y) {
+            player.y = GROUND_Y - player.height;
             player.dy = 0;
             player.grounded = true;
             player.jumpCount = 0; 
@@ -400,7 +417,7 @@
 
         // 地面
         ctx.fillStyle = '#7f8c8d';
-        ctx.fillRect(0, 350, canvas.width, 50); 
+        ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y); 
 
         if (gameState !== 'MENU') drawGameContent();
 
@@ -436,7 +453,7 @@
         ctx.fillText('點擊畫面 開始闖關', canvas.width/2, 320);
         
         ctx.fillStyle = player.color;
-        ctx.fillRect(canvas.width/2 - 25, 350 - 50, 50, 50); // 地面高度350
+        ctx.fillRect(canvas.width/2 - 25, GROUND_Y - 50, 50, 50);
     }
 
     function drawGameContent() {
@@ -445,7 +462,6 @@
         foods.forEach(f => {
             if (f.collected) return;
             ctx.fillText(f.data.icon, f.x + f.size/2, f.y + f.size/2);
-            // 手機版字體稍微調整清楚一點
             ctx.fillStyle = "#333";
             ctx.font = "bold 16px Microsoft JhengHei";
             ctx.fillText(f.data.name, f.x + f.size/2, f.y + f.size + 15);
@@ -478,21 +494,22 @@
 
         let fatPercent = Math.round(((player.width - player.baseSize) / (player.maxSize - player.baseSize)) * 100);
         ctx.fillStyle = fatPercent > 70 ? "red" : "green";
-        ctx.fillRect(10, 45, fatPercent * 2, 10); // 簡化條
+        ctx.fillRect(10, 45, fatPercent * 2, 10); 
     }
 
     function drawLevelUp() {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
+        let boxW = 500;
+        let boxH = 300;
+        if (boxW > canvas.width) boxW = canvas.width * 0.9;
+
+        let boxX = (canvas.width - boxW)/2, boxY = (canvas.height - boxH)/2;
+        
         ctx.fillStyle = '#fff';
         ctx.strokeStyle = '#f1c40f';
         ctx.lineWidth = 4;
-        let boxW = 500, boxH = 300;
-        // 手機版防破版，限制最大寬度
-        if (canvas.width < 520) { boxW = canvas.width * 0.9; }
-        
-        let boxX = (canvas.width - boxW)/2, boxY = (canvas.height - boxH)/2;
         ctx.fillRect(boxX, boxY, boxW, boxH);
         ctx.strokeRect(boxX, boxY, boxW, boxH);
 
@@ -530,7 +547,7 @@
         ctx.fillText('兇手是...', canvas.width/2, 140);
         
         let uniqueBadFoods = [...new Map(eatenRedFoods.map(item => [item['name'], item])).values()];
-        let displayLimit = 4; // 手機版顯示少一點以免太擠
+        let displayLimit = 4;
         let totalW = Math.min(uniqueBadFoods.length, displayLimit) * 70;
         let startX = canvas.width/2 - (totalW / 2) + 35;
         
@@ -575,7 +592,7 @@
         currentLevel = 0;
         player.width = player.baseSize;
         player.height = player.baseSize;
-        player.y = 280;
+        player.y = 300;
         player.dy = 0;
         player.jumpCount = 0;
         foods = [];
