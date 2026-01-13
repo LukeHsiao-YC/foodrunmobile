@@ -5,25 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>紅綠燈食物大冒險 v7.0 (完美適配版)</title>
+    <title>紅綠燈食物大冒險 v7.1</title>
     <style>
-        /* 重置預設樣式，確保滿版 */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden; /* 禁止捲動 */
+            overflow: hidden;
             background-color: #333;
             font-family: 'Microsoft JhengHei', sans-serif;
-            /* 禁止選取 */
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none; /* 禁止預設觸控行為 */
-            position: fixed; /* 鎖定畫面防止橡皮筋效果 */
+            touch-action: none;
+            position: fixed;
         }
 
-        /* 遊戲容器：負責置中 Canvas */
         #game-container {
             position: absolute;
             top: 0;
@@ -37,13 +34,12 @@
         }
 
         canvas {
-            /* 實際尺寸由 JS 控制，這裡只設陰影 */
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%);
             border-radius: 8px;
         }
 
-        /* 介面層 */
+        /* 介面層 (標題與說明) */
         #ui-layer {
             position: absolute;
             top: 10px;
@@ -56,7 +52,9 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             white-space: nowrap;
             z-index: 10;
-            pointer-events: none; /* 讓點擊穿透到遊戲 */
+            pointer-events: none;
+            /* 預設顯示，JS 會控制它的隱藏 */
+            display: block; 
         }
 
         h2 { margin: 0; font-size: 1.1rem; color: #333; }
@@ -67,7 +65,6 @@
         .y-tag { background-color: #f39c12; }
         .r-tag { background-color: #c0392b; }
 
-        /* 轉向提示 */
         #rotate-message {
             display: none;
             position: fixed;
@@ -117,43 +114,27 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const container = document.getElementById('game-container');
+    // 取得 UI 層的元素
+    const uiLayer = document.getElementById('ui-layer');
 
-    // --- 0. 自動縮放邏輯 (解決畫面被切掉的關鍵) ---
     function resizeGame() {
-        // 取得瀏覽器內部實際可用寬高
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
-        
-        // 遊戲原始設計比例
         const gameRatio = canvas.width / canvas.height;
         const windowRatio = windowWidth / windowHeight;
-        
         let finalWidth, finalHeight;
-
-        // 計算最佳縮放尺寸 (Letterbox 模式：保持比例，塞滿畫面)
         if (windowRatio < gameRatio) {
-            // 螢幕比較窄，以寬度為基準
             finalWidth = windowWidth;
             finalHeight = windowWidth / gameRatio;
         } else {
-            // 螢幕比較寬，以高度為基準
             finalWidth = windowHeight * gameRatio;
             finalHeight = windowHeight;
         }
-
-        // 套用 CSS 尺寸 (不影響 Canvas 內部的解析度)
         canvas.style.width = finalWidth + "px";
         canvas.style.height = finalHeight + "px";
     }
-
-    // 監聽視窗變化，隨時調整
     window.addEventListener('resize', resizeGame);
-    window.addEventListener('orientationchange', () => {
-        // 轉向時有時候瀏覽器反應慢，延遲一下再算
-        setTimeout(resizeGame, 200);
-    });
-    // 初始執行一次
+    window.addEventListener('orientationchange', () => { setTimeout(resizeGame, 200); });
     resizeGame();
 
 
@@ -224,64 +205,39 @@
 
     let foods = [];
     let effects = [];
-
-    // --- 3. 核心邏輯 (為適配 16:9 修改地面位置) ---
-    // 地面位置設為 400 (Canvas 高度 450)
     const GROUND_Y = 400;
 
     function spawnFood() {
         let rand = Math.random();
         let category, type, colorCode, lightName;
-
         if (rand < 0.35) { 
             type = greenList[Math.floor(Math.random() * greenList.length)];
-            category = 'green';
-            colorCode = '#27ae60';
-            lightName = "綠燈!行";
+            category = 'green'; colorCode = '#27ae60'; lightName = "綠燈!行";
         } else if (rand < 0.6) { 
             type = yellowList[Math.floor(Math.random() * yellowList.length)];
-            category = 'yellow';
-            colorCode = '#f39c12';
-            lightName = "黃燈!";
+            category = 'yellow'; colorCode = '#f39c12'; lightName = "黃燈!";
         } else { 
             type = redList[Math.floor(Math.random() * redList.length)];
-            category = 'red';
-            colorCode = '#c0392b';
-            lightName = "紅燈!停";
+            category = 'red'; colorCode = '#c0392b'; lightName = "紅燈!停";
         }
-
         foods.push({
             x: canvas.width,
-            y: (GROUND_Y - 100) + Math.random() * 80, // 根據新地面調整生成
+            y: (GROUND_Y - 100) + Math.random() * 80,
             size: 45,
-            data: type,
-            category: category,
-            colorCode: colorCode,
-            lightName: lightName,
+            data: type, category: category, colorCode: colorCode, lightName: lightName,
             collected: false
         });
     }
 
     class FloatingText {
         constructor(text, x, y, color) {
-            this.text = text;
-            this.x = x;
-            this.y = y;
-            this.color = color;
-            this.life = 40;
-            this.dy = -1;
+            this.text = text; this.x = x; this.y = y; this.color = color; this.life = 40; this.dy = -1;
         }
-        update() {
-            this.y += this.dy;
-            this.life--;
-        }
+        update() { this.y += this.dy; this.life--; }
         draw(ctx) {
-            ctx.fillStyle = this.color;
-            ctx.font = "bold 20px Microsoft JhengHei";
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 3;
-            ctx.strokeText(this.text, this.x, this.y);
-            ctx.fillText(this.text, this.x, this.y);
+            ctx.fillStyle = this.color; ctx.font = "bold 20px Microsoft JhengHei";
+            ctx.strokeStyle = "white"; ctx.lineWidth = 3;
+            ctx.strokeText(this.text, this.x, this.y); ctx.fillText(this.text, this.x, this.y);
         }
     }
 
@@ -296,26 +252,15 @@
             if (player.grounded || player.jumpCount < player.maxJumps) {
                 let fatPenalty = (player.width - player.baseSize) / 10; 
                 let currentJump = player.jumpPower + (fatPenalty * 0.2);
-                player.dy = currentJump;
-                player.grounded = false;
-                player.jumpCount++; 
+                player.dy = currentJump; player.grounded = false; player.jumpCount++; 
             }
         }
     }
 
-    // 統一監聽整個頁面，防止死角
-    window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space') handleInput();
-    });
-    
-    // 支援觸控與滑鼠
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleInput(); });
     ['mousedown', 'touchstart'].forEach(evt => {
         document.body.addEventListener(evt, (e) => {
-            // 只有當不是在點擊「轉向提示」時才觸發遊戲輸入
-            if (e.target.id !== 'rotate-message') {
-                e.preventDefault();
-                handleInput();
-            }
+            if (e.target.id !== 'rotate-message') { e.preventDefault(); handleInput(); }
         }, { passive: false });
     });
 
@@ -323,6 +268,8 @@
         gameState = 'PLAYING';
         player.y = 300;
         updateLevelSettings();
+        // 關鍵修改：開始遊戲時，隱藏標題 UI
+        uiLayer.style.display = 'none';
     }
 
     function updateLevelSettings() {
@@ -344,272 +291,131 @@
 
     function update() {
         if (gameState !== 'PLAYING') return;
-
-        player.dy += player.gravity;
-        player.y += player.dy;
-
-        // 地面判定
+        player.dy += player.gravity; player.y += player.dy;
         if (player.y + player.height > GROUND_Y) {
-            player.y = GROUND_Y - player.height;
-            player.dy = 0;
-            player.grounded = true;
-            player.jumpCount = 0; 
+            player.y = GROUND_Y - player.height; player.dy = 0; player.grounded = true; player.jumpCount = 0; 
         }
-
         frameCount++;
         let spawnRate = Math.max(80, 120 - (currentLevel * 15));
         if (frameCount % spawnRate === 0) spawnFood();
-
         for (let i = 0; i < foods.length; i++) {
-            let f = foods[i];
-            f.x -= gameSpeed;
-
+            let f = foods[i]; f.x -= gameSpeed;
             let hitMargin = 12; 
             if (!f.collected && 
                 player.x + hitMargin < f.x + f.size - hitMargin &&
                 player.x + player.width - hitMargin > f.x + hitMargin &&
                 player.y + hitMargin < f.y + f.size - hitMargin &&
                 player.y + player.height - hitMargin > f.y + hitMargin) {
-                
-                f.collected = true;
-                handleCollision(f);
+                f.collected = true; handleCollision(f);
             }
         }
         foods = foods.filter(f => f.x + f.size > -100);
-
-        effects.forEach(e => e.update());
-        effects = effects.filter(e => e.life > 0);
-
+        effects.forEach(e => e.update()); effects = effects.filter(e => e.life > 0);
         if (currentLevel < levelConfig.length) {
-            if (score >= levelConfig[currentLevel].targetScore) {
-                gameState = 'LEVEL_UP';
-            }
+            if (score >= levelConfig[currentLevel].targetScore) { gameState = 'LEVEL_UP'; }
         }
     }
 
     function handleCollision(food) {
         effects.push(new FloatingText(food.lightName, player.x, player.y - 20, food.colorCode));
-        
         if (food.category === 'green') {
-            score += 20;
-            player.width -= 10; 
-            player.height -= 10;
-            if (player.width < player.baseSize) {
-                player.width = player.baseSize;
-                player.height = player.baseSize;
-            }
-        } else if (food.category === 'yellow') {
-            score += 10;
+            score += 20; player.width -= 10; player.height -= 10;
+            if (player.width < player.baseSize) { player.width = player.baseSize; player.height = player.baseSize; }
+        } else if (food.category === 'yellow') { score += 10;
         } else if (food.category === 'red') {
-            score -= 5;
-            player.width += 12; 
-            player.height += 12;
-            eatenRedFoods.push(food.data);
+            score -= 5; player.width += 12; player.height += 12; eatenRedFoods.push(food.data);
         }
-
-        if (player.width >= player.maxSize) {
-            gameState = 'GAMEOVER';
-        }
+        if (player.width >= player.maxSize) { gameState = 'GAMEOVER'; }
     }
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 地面
-        ctx.fillStyle = '#7f8c8d';
-        ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y); 
-
+        ctx.fillStyle = '#7f8c8d'; ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y); 
         if (gameState !== 'MENU') drawGameContent();
-
         if (gameState === 'MENU') drawMenu();
         else if (gameState === 'LEVEL_UP') drawLevelUp();
         else if (gameState === 'GAMEOVER') drawGameOver();
         else if (gameState === 'WIN') drawWin();
     }
 
-    // 簡化的繪圖輔助
     function drawCenteredText(text, y, size=24, color='#555') {
-        ctx.fillStyle = color;
-        ctx.font = `${size}px Microsoft JhengHei`;
-        ctx.fillText(text, canvas.width/2, y);
+        ctx.fillStyle = color; ctx.font = `${size}px Microsoft JhengHei`; ctx.fillText(text, canvas.width/2, y);
     }
 
     function drawMenu() {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.textAlign = 'center';
-        
-        ctx.fillStyle = '#333';
-        ctx.font = 'bold 40px Microsoft JhengHei';
-        ctx.fillText('肚子好餓...', canvas.width/2, 100);
-
-        ctx.fillStyle = '#555';
-        ctx.font = '24px Microsoft JhengHei';
+        ctx.fillStyle = '#333'; ctx.font = 'bold 40px Microsoft JhengHei'; ctx.fillText('肚子好餓...', canvas.width/2, 100);
+        ctx.fillStyle = '#555'; ctx.font = '24px Microsoft JhengHei';
         drawCenteredText('可以幫我選擇健康的食物嗎?', 160);
         drawCenteredText('不想要吃太多紅燈食物...', 200);
-
-        ctx.fillStyle = '#e74c3c';
-        ctx.font = 'bold 28px Microsoft JhengHei';
-        ctx.fillText('點擊畫面 開始闖關', canvas.width/2, 320);
-        
-        ctx.fillStyle = player.color;
-        ctx.fillRect(canvas.width/2 - 25, GROUND_Y - 50, 50, 50);
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 28px Microsoft JhengHei'; ctx.fillText('點擊畫面 開始闖關', canvas.width/2, 320);
+        ctx.fillStyle = player.color; ctx.fillRect(canvas.width/2 - 25, GROUND_Y - 50, 50, 50);
     }
 
     function drawGameContent() {
-        ctx.font = "30px Arial";
-        ctx.textAlign = "center";
+        ctx.font = "30px Arial"; ctx.textAlign = "center";
         foods.forEach(f => {
             if (f.collected) return;
             ctx.fillText(f.data.icon, f.x + f.size/2, f.y + f.size/2);
-            ctx.fillStyle = "#333";
-            ctx.font = "bold 16px Microsoft JhengHei";
-            ctx.fillText(f.data.name, f.x + f.size/2, f.y + f.size + 15);
+            ctx.fillStyle = "#333"; ctx.font = "bold 16px Microsoft JhengHei"; ctx.fillText(f.data.name, f.x + f.size/2, f.y + f.size + 15);
             ctx.font = "30px Arial";
         });
-
-        ctx.fillStyle = player.color;
-        if (player.width > player.baseSize * 1.4) ctx.fillStyle = '#e74c3c';
+        ctx.fillStyle = player.color; if (player.width > player.baseSize * 1.4) ctx.fillStyle = '#e74c3c';
         ctx.fillRect(player.x, player.y, player.width, player.height);
-        
-        // 眼睛
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(player.x + player.width*0.7, player.y + player.height*0.3, player.width*0.15, 0, Math.PI*2);
-        ctx.fill();
-        ctx.fillStyle = 'black';
-        ctx.beginPath();
-        ctx.arc(player.x + player.width*0.75, player.y + player.height*0.3, player.width*0.05, 0, Math.PI*2);
-        ctx.fill();
-
+        ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(player.x + player.width*0.7, player.y + player.height*0.3, player.width*0.15, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(player.x + player.width*0.75, player.y + player.height*0.3, player.width*0.05, 0, Math.PI*2); ctx.fill();
         effects.forEach(e => e.draw(ctx));
-
-        // HUD
-        ctx.fillStyle = '#333';
-        ctx.textAlign = "left";
-        ctx.font = "bold 20px Microsoft JhengHei";
+        ctx.fillStyle = '#333'; ctx.textAlign = "left"; ctx.font = "bold 20px Microsoft JhengHei";
         let levelData = levelConfig[currentLevel] || levelConfig[levelConfig.length-1];
-        ctx.fillText(`Lv.${currentLevel + 1}`, 10, 30);
-        ctx.fillText(`${score} / ${levelData.targetScore}`, 80, 30);
-
+        ctx.fillText(`Lv.${currentLevel + 1}`, 10, 30); ctx.fillText(`${score} / ${levelData.targetScore}`, 80, 30);
         let fatPercent = Math.round(((player.width - player.baseSize) / (player.maxSize - player.baseSize)) * 100);
-        ctx.fillStyle = fatPercent > 70 ? "red" : "green";
-        ctx.fillRect(10, 45, fatPercent * 2, 10); 
+        ctx.fillStyle = fatPercent > 70 ? "red" : "green"; ctx.fillRect(10, 45, fatPercent * 2, 10); 
     }
 
     function drawLevelUp() {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        let boxW = 500;
-        let boxH = 300;
-        if (boxW > canvas.width) boxW = canvas.width * 0.9;
-
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let boxW = 500; if (boxW > canvas.width) boxW = canvas.width * 0.9; let boxH = 300;
         let boxX = (canvas.width - boxW)/2, boxY = (canvas.height - boxH)/2;
-        
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#f1c40f';
-        ctx.lineWidth = 4;
-        ctx.fillRect(boxX, boxY, boxW, boxH);
-        ctx.strokeRect(boxX, boxY, boxW, boxH);
-
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#d35400';
-        ctx.font = 'bold 30px Microsoft JhengHei';
-        ctx.fillText('🎉 恭喜過關！', canvas.width/2, boxY + 60);
-
-        ctx.fillStyle = '#333';
-        ctx.font = '20px Microsoft JhengHei';
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 4; ctx.fillRect(boxX, boxY, boxW, boxH); ctx.strokeRect(boxX, boxY, boxW, boxH);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#d35400'; ctx.font = 'bold 30px Microsoft JhengHei'; ctx.fillText('🎉 恭喜過關！', canvas.width/2, boxY + 60);
+        ctx.fillStyle = '#333'; ctx.font = '20px Microsoft JhengHei';
         let msg = levelConfig[currentLevel].msg.split('\n');
-        for(let i=0; i<msg.length; i++) {
-            ctx.fillText(msg[i], canvas.width/2, boxY + 120 + (i*30));
-        }
-
-        ctx.fillStyle = '#2980b9';
-        ctx.font = 'bold 24px Microsoft JhengHei';
-        ctx.fillText('點擊 下一關 ➡', canvas.width/2, boxY + 250);
+        for(let i=0; i<msg.length; i++) { ctx.fillText(msg[i], canvas.width/2, boxY + 120 + (i*30)); }
+        ctx.fillStyle = '#2980b9'; ctx.font = 'bold 24px Microsoft JhengHei'; ctx.fillText('點擊 下一關 ➡', canvas.width/2, boxY + 250);
     }
 
     function drawGameOver() {
-        ctx.fillStyle = 'rgba(0,0,0,0.9)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 36px Microsoft JhengHei';
-        ctx.fillText('太重了！', canvas.width/2, 60);
-        
-        ctx.font = '20px Microsoft JhengHei';
-        ctx.fillStyle = '#ecf0f1';
-        ctx.fillText(`最終分數: ${score}`, canvas.width/2, 100);
-
-        ctx.fillStyle = '#ff6b6b';
-        ctx.fillText('兇手是...', canvas.width/2, 140);
-        
+        ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = 'bold 36px Microsoft JhengHei'; ctx.fillText('太重了！', canvas.width/2, 60);
+        ctx.font = '20px Microsoft JhengHei'; ctx.fillStyle = '#ecf0f1'; ctx.fillText(`最終分數: ${score}`, canvas.width/2, 100);
+        ctx.fillStyle = '#ff6b6b'; ctx.fillText('兇手是...', canvas.width/2, 140);
         let uniqueBadFoods = [...new Map(eatenRedFoods.map(item => [item['name'], item])).values()];
-        let displayLimit = 4;
-        let totalW = Math.min(uniqueBadFoods.length, displayLimit) * 70;
-        let startX = canvas.width/2 - (totalW / 2) + 35;
-        
+        let displayLimit = 4; let totalW = Math.min(uniqueBadFoods.length, displayLimit) * 70; let startX = canvas.width/2 - (totalW / 2) + 35;
         ctx.font = "30px Arial";
         for(let i=0; i<uniqueBadFoods.length && i<displayLimit; i++) {
-            let food = uniqueBadFoods[i];
-            let xPos = startX + (i * 70);
-            ctx.fillText(food.icon, xPos, 190);
-            ctx.save();
-            ctx.fillStyle = "#ccc";
-            ctx.font = "14px Microsoft JhengHei";
-            ctx.fillText(food.name, xPos, 220);
-            ctx.restore();
+            let food = uniqueBadFoods[i]; let xPos = startX + (i * 70);
+            ctx.fillText(food.icon, xPos, 190); ctx.save(); ctx.fillStyle = "#ccc"; ctx.font = "14px Microsoft JhengHei"; ctx.fillText(food.name, xPos, 220); ctx.restore();
         }
-
-        ctx.fillStyle = '#f1c40f';
-        ctx.font = 'bold 24px Microsoft JhengHei';
-        ctx.fillText('點擊 重玩', canvas.width/2, 320);
+        ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 24px Microsoft JhengHei'; ctx.fillText('點擊 重玩', canvas.width/2, 320);
     }
 
     function drawWin() {
-        ctx.fillStyle = 'rgba(0,0,0,0.85)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#f1c40f';
-        ctx.font = 'bold 40px Microsoft JhengHei';
-        ctx.fillText('🏆 健康大師！', canvas.width/2, 120);
-        
-        ctx.fillStyle = '#fff';
-        ctx.font = '20px Microsoft JhengHei';
-        ctx.fillText(`得分 ${score}`, canvas.width/2, 180);
-        ctx.fillText('你已經學會選擇食物囉！', canvas.width/2, 220);
-
-        ctx.fillStyle = '#2ecc71';
-        ctx.font = 'bold 24px Microsoft JhengHei';
-        ctx.fillText('點擊 再玩一次', canvas.width/2, 320);
+        ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 40px Microsoft JhengHei'; ctx.fillText('🏆 健康大師！', canvas.width/2, 120);
+        ctx.fillStyle = '#fff'; ctx.font = '20px Microsoft JhengHei'; ctx.fillText(`得分 ${score}`, canvas.width/2, 180); ctx.fillText('你已經學會選擇食物囉！', canvas.width/2, 220);
+        ctx.fillStyle = '#2ecc71'; ctx.font = 'bold 24px Microsoft JhengHei'; ctx.fillText('點擊 再玩一次', canvas.width/2, 320);
     }
 
     function resetGame() {
-        score = 0;
-        currentLevel = 0;
-        player.width = player.baseSize;
-        player.height = player.baseSize;
-        player.y = 300;
-        player.dy = 0;
-        player.jumpCount = 0;
-        foods = [];
-        effects = [];
-        eatenRedFoods = [];
-        gameState = 'MENU'; 
-        updateLevelSettings();
+        score = 0; currentLevel = 0; player.width = player.baseSize; player.height = player.baseSize; player.y = 300; player.dy = 0; player.jumpCount = 0;
+        foods = []; effects = []; eatenRedFoods = []; gameState = 'MENU'; updateLevelSettings();
+        // 關鍵修改：回到主選單時，重新顯示標題 UI
+        uiLayer.style.display = 'block';
     }
 
-    function loop() {
-        update();
-        draw();
-        requestAnimationFrame(loop);
-    }
-
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
     loop();
-
 </script>
 </body>
 </html>
